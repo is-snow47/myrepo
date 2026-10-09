@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
 
     const https = require('https')
 
-    const rzpOrder = await new Promise((resolve, reject) => {
+    const rzpOrder: any = await new Promise((resolve, reject) => {
       const data = JSON.stringify({
         amount: amountInPaise,
         currency: 'INR',
