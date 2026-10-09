@@ -45,8 +45,9 @@ async function fetchProducts(params: SearchParams) {
   }
 }
 
+import { prisma } from '@/lib/prisma'
+
 async function getFeaturedCategoriesData() {
-  const prisma = new PrismaClient()
   const cats = ['Women Clothing', 'Beauty & Health', 'Home & Kitchen', 'Bags & Footwear', 'Accessories']
   const featured = []
   
@@ -63,7 +64,6 @@ async function getFeaturedCategoriesData() {
 }
 
 async function getEditorialProducts() {
-  const prisma = new PrismaClient()
   return await prisma.product.findMany({
     where: { productId: { not: "TEST_PROD_2" } },
     take: 5,
