@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  outputFileTracingIncludes: {
+    "/*": ["./prisma/**/*", "./prisma/prisma/**/*"],
+    "/api/**/*": ["./prisma/**/*", "./prisma/prisma/**/*"]
+  },
   turbopack: {
     root: path.resolve(__dirname, '..'),
     rules: {
