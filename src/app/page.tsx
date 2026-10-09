@@ -19,72 +19,99 @@ type SearchParams = {
   maxPrice?: string
 }
 
-async function fetchProducts(params: SearchParams) {
-  const baseUrl = process.env.NEXTAUTH_URL 
-    ? process.env.NEXTAUTH_URL 
-    : process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}` 
-      : 'http://localhost:3000'
-  const qs = new URLSearchParams()
-  if (params.search) qs.set('search', params.search)
-  if (params.category) qs.set('category', params.category)
-  if (params.sort) qs.set('sort', params.sort)
-  if (params.page) qs.set('page', params.page)
-  if (params.minPrice) qs.set('minPrice', params.minPrice)
-  if (params.maxPrice) qs.set('maxPrice', params.maxPrice)
-  qs.set('limit', '20')
+import { prisma } from '@/lib/prisma'
 
+async function fetchProductsDirect(params: SearchParams) {
   try {
-    const res = await fetch(`${baseUrl}/api/products?${qs.toString()}`, {
-      cache: 'no-store',
-    })
-    if (!res.ok) return { products: [], pagination: { page: 1, totalPages: 1, total: 0 } }
-    return res.json()
-  } catch {
+    const page = parseInt(params.page || '1')
+    const limit = 20
+    const skip = (page - 1) * limit
+
+    const where: any = {}
+    if (params.search) {
+      where.OR = [
+        { title: { contains: params.search } },
+        { brand: { contains: params.search } },
+        { description: { contains: params.search } }
+      ]
+    }
+    if (params.category) where.category = params.category
+    if (params.minPrice) where.discountedPrice = { ...where.discountedPrice, gte: parseFloat(params.minPrice) }
+    if (params.maxPrice) where.discountedPrice = { ...where.discountedPrice, lte: parseFloat(params.maxPrice) }
+
+    let orderBy: any = { rating: 'desc' }
+    if (params.sort === 'price_asc') orderBy = { discountedPrice: 'asc' }
+    if (params.sort === 'price_desc') orderBy = { discountedPrice: 'desc' }
+    if (params.sort === 'newest') orderBy = { createdAt: 'desc' }
+
+    const [products, total] = await Promise.all([
+      prisma.product.findMany({ where, orderBy, skip, take: limit }),
+      prisma.product.count({ where })
+    ])
+
+    return {
+      products,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    }
+  } catch (err) {
+    console.error("fetchProductsDirect error:", err)
     return { products: [], pagination: { page: 1, totalPages: 1, total: 0 } }
   }
 }
 
-import { prisma } from '@/lib/prisma'
-
 async function getFeaturedCategoriesData() {
-  const cats = ['Women Clothing', 'Beauty & Health', 'Home & Kitchen', 'Bags & Footwear', 'Accessories']
-  const featured = []
-  
-  for (const c of cats) {
-    const p = await prisma.product.findFirst({
-      where: { category: c },
-      select: { title: true, imageUrl: true, category: true, description: true }
-    })
-    if (p) {
-      featured.push(p)
+  try {
+    const cats = ['Women Clothing', 'Beauty & Health', 'Home & Kitchen', 'Bags & Footwear', 'Accessories']
+    const featured = []
+    
+    for (const c of cats) {
+      const p = await prisma.product.findFirst({
+        where: { category: c },
+        select: { title: true, imageUrl: true, category: true, description: true }
+      })
+      if (p) {
+        featured.push(p)
+      }
     }
+    return featured
+  } catch (err) {
+    console.error("Featured categories error:", err)
+    return []
   }
-  return featured
 }
 
 async function getEditorialProducts() {
-  return await prisma.product.findMany({
-    where: { productId: { not: "TEST_PROD_2" } },
-    take: 5,
-    orderBy: { rating: 'desc' },
-    select: {
-      id: true,
-      title: true,
-      category: true,
-      imageUrl: true,
-      originalPrice: true,
-      discountedPrice: true,
-      rating: true,
-      reviewCount: true,
-      description: true
-    }
-  })
+  try {
+    return await prisma.product.findMany({
+      where: { productId: { not: "TEST_PROD_2" } },
+      take: 5,
+      orderBy: { rating: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        category: true,
+        imageUrl: true,
+        originalPrice: true,
+        discountedPrice: true,
+        rating: true,
+        reviewCount: true,
+        description: true
+      }
+    })
+  } catch (err) {
+    console.error("Editorial products error:", err)
+    return []
+  }
 }
 
 async function ProductList({ searchParamsPromise }: { searchParamsPromise: Promise<SearchParams> }) {
   const params = await searchParamsPromise
-  const { products, pagination } = await fetchProducts(params)
+  const { products, pagination } = await fetchProductsDirect(params)
   const currentPage = parseInt(params.page || '1')
 
   const buildPageUrl = (page: number) => {
